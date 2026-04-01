@@ -22,6 +22,9 @@ A high-fidelity, local-first web application for downloading audio from YouTube.
 
 - **Python 3.10+**
 - **FFmpeg**: Must be installed on your system. By default, the app looks for FFmpeg at `C:\ffmpeg-8.0-full_build\bin\ffmpeg.exe` (Windows). *You can modify this path in the `YTDLP_BASE_OPTIONS` dictionary in `app.py` or add FFmpeg to your system PATH.*
+  > [!IMPORTANT]
+  > **FFmpeg is strictly required for audio extraction.** 
+  > Download the latest build from [ffmpeg.org](https://ffmpeg.org/download.html), extract the archive, and ensure the `bin` folder is added to your Windows system's `PATH` environment variable. Alternatively, you can point to the absolute path in `app.py`.
 - **Google Chrome**: Required for `undetected-chromedriver` to create a persistent profile.
 
 ## Setup Instructions
