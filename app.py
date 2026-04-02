@@ -31,10 +31,17 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 DEFAULT_DOWNLOAD_PATH = os.path.join(BASE_DIR, "downloads")
 YT_PROFILE_DIR = os.path.join(BASE_DIR, ".yt_profile")
 COOKIES_FILE = os.path.join(BASE_DIR, "cookies.txt")
+BIN_DIR = os.path.join(BASE_DIR, "bin")
+FFMPEG_EXE = os.path.join(BIN_DIR, "ffmpeg.exe")
+FFPROBE_EXE = os.path.join(BIN_DIR, "ffprobe.exe")
 
 # Ensure default directories exist
 if not os.path.exists(DEFAULT_DOWNLOAD_PATH):
     os.makedirs(DEFAULT_DOWNLOAD_PATH)
+
+# Add bin to PATH for absolute certainty with subprocesses and yt-dlp
+if os.path.exists(BIN_DIR) and BIN_DIR not in os.environ['PATH']:
+    os.environ['PATH'] = BIN_DIR + os.pathsep + os.environ['PATH']
 
 # Settings Management
 def load_settings():
@@ -177,7 +184,7 @@ def run_download(job_id: str, req: DownloadRequest, download_path: str):
     
     ydl_opts = {
         'format': 'bestaudio/best',
-        'ffmpeg_location': 'C:/ffmpeg-8.0-full_build/bin/ffmpeg.exe',
+        'ffmpeg_location': FFMPEG_EXE,
         'outtmpl': os.path.join(download_path, '%(title).100s [%(id)s].%(ext)s'),
         'restrictfilenames': True,
         'nooverwrites': True,
@@ -355,7 +362,9 @@ def get_cookies_with_selenium(url=None):
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     settings = load_settings()
-    return templates.TemplateResponse("index.html", {"request": request, "settings": settings})
+    return templates.TemplateResponse(
+        request=request, name="index.html", context={"settings": settings}
+    )
 
 @app.post("/api/download")
 async def start_download(req: DownloadRequest):

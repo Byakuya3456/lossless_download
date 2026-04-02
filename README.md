@@ -20,11 +20,8 @@ A high-fidelity, local-first web application for downloading audio from YouTube.
 
 ## Requirements
 
-- **Python 3.10+**
-- **FFmpeg**: Must be installed on your system. By default, the app looks for FFmpeg at `C:\ffmpeg-8.0-full_build\bin\ffmpeg.exe` (Windows). *You can modify this path in the `YTDLP_BASE_OPTIONS` dictionary in `app.py` or add FFmpeg to your system PATH.*
-  > [!IMPORTANT]
-  > **FFmpeg is strictly required for audio extraction.** 
-  > Download the latest build from [ffmpeg.org](https://ffmpeg.org/download.html), extract the archive, and ensure the `bin` folder is added to your Windows system's `PATH` environment variable. Alternatively, you can point to the absolute path in `app.py`.
+- **Python 3.13+**
+- **FFmpeg & FFprobe (Bundled)**: This application now comes bundled with its own FFmpeg and FFprobe binaries in the `bin/` folder. No manual installation or PATH configuration is strictly required for core functionality.
 - **Google Chrome**: Required for `undetected-chromedriver` to create a persistent profile.
 
 ## Setup Instructions
@@ -79,7 +76,8 @@ A high-fidelity, local-first web application for downloading audio from YouTube.
 - `proxies.txt` - List of IPs for proxy rotation.
 - `cookies.txt` - Extracted runtime session cookies (auto-generated).
 - `.yt_profile/` - Internal Chrome profile data (auto-generated).
-- `downloads/` - Default directory where your high-quality MP3 tracks are saved.
+- `bin/` - Bundled FFmpeg and FFprobe binaries for Windows.
+- `downloads/` - Default directory where your high-quality MP3 tracks are saved (now tracked in git).
 
 ## Notes & Troubleshooting
 
