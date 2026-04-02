@@ -61,7 +61,7 @@ A high-fidelity, local-first web application for downloading audio from YouTube.
    ```
 3. **Link Your Account (Important)**:
    - On the web dashboard, click **Link Account** under the YouTube Account section.
-   - An automated Chrome window will appear. Sign in to your YouTube/Google account.
+   - An automated Chrome window will appear. Sign in to your YouTube/Google account.(no need to sign-in just click the account link account button and make sure its turned green)
    - Once signed in, you can close the window. The app saves your session securely in `.yt_profile` and uses it to extract audio smoothly. *You only have to do this once.*
 4. **Download Audio**:
    - Paste a YouTube video or playlist URL into the input field.
