@@ -3,6 +3,28 @@ import json
 import uuid
 import threading
 import yt_dlp
+import asyncio
+from fastapi import FastAPI, Request, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from typing import Optional, Dict, Any, List
+import time
+import random
+from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3, APIC
+from PIL import Image
+import aiofiles
+import queue
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+import undetected_chromedriver as uc
+import shutil
+import re
+import yt_dlp
 from fastapi import FastAPI, Request, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +46,75 @@ import undetected_chromedriver as uc
 import shutil
 import re
 import threading
+import time
+
+# --- Monkey-patch file operations to prevent Windows Defender WinError 5 / 32 ---
+_original_replace = os.replace
+_original_rename = os.rename
+
+def _robust_replace(src, dst):
+    for i in range(10):
+        try:
+            return _original_replace(src, dst)
+        except OSError as e:
+            if getattr(e, 'winerror', None) in (5, 32):
+                time.sleep(1.0)
+                continue
+            raise
+    return _original_replace(src, dst)
+
+def _robust_rename(src, dst):
+    for i in range(10):
+        try:
+            return _original_rename(src, dst)
+        except OSError as e:
+            if getattr(e, 'winerror', None) in (5, 32):
+                time.sleep(1.0)
+                continue
+            raise
+    return _original_rename(src, dst)
+
+os.replace = _robust_replace
+os.rename = _robust_rename
+# --------------------------------------------------------------------------------
+
+class SquareThumbnailPP(yt_dlp.postprocessor.PostProcessor):
+    def run(self, info):
+        filepath = None
+        for t in reversed(info.get('thumbnails', [])):
+            fp = t.get('filepath')
+            if fp and os.path.exists(fp):
+                filepath = fp
+                break
+        if not filepath and 'filepath' in info:
+            base = os.path.splitext(info['filepath'])[0]
+            if os.path.exists(base + '.jpg'):
+                filepath = base + '.jpg'
+                
+        if filepath:
+            try:
+                self.to_screen(f'Cropping {filepath} to square')
+                with Image.open(filepath) as img:
+                    w, h = img.size
+                    if w != h:
+                        s = min(w, h)
+                        left = (w - s) // 2
+                        top = (h - s) // 2
+                        cropped = img.crop((left, top, left+s, top+s))
+                    else:
+                        cropped = None
+                
+                if cropped:
+                    cropped.save(filepath)
+            except Exception as e:
+                self.to_screen(f'Crop failed: {e}')
+        return [], info
+
+# SleepPP is no longer necessary as os.replace is patched, but we keep it just in case
+class SleepPP(yt_dlp.postprocessor.PostProcessor):
+    def run(self, info):
+        time.sleep(1.5)
+        return [], info
 
 # Base configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +125,49 @@ COOKIES_FILE = os.path.join(BASE_DIR, "cookies.txt")
 BIN_DIR = os.path.join(BASE_DIR, "bin")
 FFMPEG_EXE = os.path.join(BIN_DIR, "ffmpeg.exe")
 FFPROBE_EXE = os.path.join(BIN_DIR, "ffprobe.exe")
+
+HISTORY_FILE = os.path.join(BASE_DIR, "history.txt")
+
+if not os.path.exists(HISTORY_FILE):
+    open(HISTORY_FILE, 'a').close()
+
+def check_history(video_id):
+    if not video_id:
+        return False
+    if not os.path.exists(HISTORY_FILE):
+        return False
+    with open(HISTORY_FILE, "r") as f:
+        for line in f:
+            if video_id in line:
+                return True
+    return False
+
+def add_to_history(video_id):
+    if not video_id: return
+    with open(HISTORY_FILE, "a") as f:
+        f.write(f"youtube {video_id}\n")
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections.copy():
+            try:
+                await connection.send_text(message)
+            except Exception:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
 
 # Ensure default directories exist
 if not os.path.exists(DEFAULT_DOWNLOAD_PATH):
@@ -72,6 +206,21 @@ def load_proxies():
 load_proxies()
 
 app = FastAPI(title="Local Audio Downloader")
+app.mount("/downloads", StaticFiles(directory=DEFAULT_DOWNLOAD_PATH), name="downloads")
+
+async def broadcast_jobs_state():
+    while True:
+        await asyncio.sleep(1)
+        if manager.active_connections:
+            await manager.broadcast(json.dumps({
+                "type": "jobs_update",
+                "jobs": list(jobs.values())
+            }))
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(broadcast_jobs_state())
+
 
 # Try to create templates directory if it doesn't exist
 templates_dir = os.path.join(BASE_DIR, "templates")
@@ -82,10 +231,13 @@ templates = Jinja2Templates(directory=templates_dir)
 
 class DownloadRequest(BaseModel):
     url: str
-    format: str = "mp3"
-    bitrate: str = "320"
+    codec: str = "mp3"
+    bitrate: str = "320k"
+    sample_rate: str = "44100"
+    sample_format: str = "s16"
     embed_thumbnail: bool = True
     embed_metadata: bool = True
+    force: bool = False
 
 class SettingsUpdate(BaseModel):
     download_path: str
@@ -153,23 +305,36 @@ def clean_title(title):
     return title
 
 def run_download(job_id: str, req: DownloadRequest, download_path: str):
-    ext_map = {
+    codec_map = {
         "mp3": "mp3",
         "m4a": "m4a",
-        "aac": "m4a",
+        "aac": "aac",
         "flac": "flac",
         "ogg": "vorbis",
         "opus": "opus",
-        "wav": "wav"
+        "wav": "wav",
+        "alac": "alac",
+        "truehd": "truehd",
+        "dts": "dts",
+        "aiff": "aiff"
     }
     
-    acodec = ext_map.get(req.format, "mp3")
+    acodec = codec_map.get(req.codec.lower(), "mp3")
     
-    # Try to get cookies if needed, or if specifically desired
+    pp_args = []
+    
+    if req.sample_rate and req.sample_rate != "auto":
+        pp_args.extend(["-ar", req.sample_rate])
+        
+    if req.sample_format and req.sample_format != "auto":
+        pp_args.extend(["-sample_fmt", req.sample_format])
+        
+    if req.bitrate and req.bitrate != "best":
+        if req.codec.lower() not in ["flac", "wav", "aiff", "alac", "truehd", "dts"]:
+            pp_args.extend(["-b:a", req.bitrate])
+    
+    # Try to get cookies if needed
     cookie_file = os.path.join(BASE_DIR, "cookies.txt")
-    
-    # Use 0 for "highest quality / VBR" unless a specific bitrate is forced
-    quality = "0" if req.bitrate == "best" else req.bitrate
     
     # Dynamic Session & IP Rolling Logic
     global LAST_COOKIE_REFRESH
@@ -194,11 +359,8 @@ def run_download(job_id: str, req: DownloadRequest, download_path: str):
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': acodec,
-            'preferredquality': quality,
-        }, {
-            'key': 'FFmpegMetadata',
-            'add_metadata': True,
         }],
+        'postprocessor_args': pp_args,
         'writethumbnail': req.embed_thumbnail,
         'progress_hooks': [lambda d: progress_hook(d, job_id)],
         'quiet': False,
@@ -228,20 +390,26 @@ def run_download(job_id: str, req: DownloadRequest, download_path: str):
     if os.path.exists(cookie_file):
         ydl_opts['cookiefile'] = cookie_file
 
-    if req.embed_thumbnail:
-        ydl_opts['postprocessors'].append({
-            'key': 'EmbedThumbnail',
-            'already_have_thumbnail': False,
-        })
-
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if req.embed_thumbnail:
+                ydl.add_post_processor(yt_dlp.postprocessor.FFmpegThumbnailsConvertorPP(ydl, format='jpg'))
+                ydl.add_post_processor(SquareThumbnailPP())
+                ydl.add_post_processor(yt_dlp.postprocessor.EmbedThumbnailPP(ydl, already_have_thumbnail=False))
+            
+            if req.embed_metadata:
+                ydl.add_post_processor(SleepPP()) # Prevent WinError 5
+                ydl.add_post_processor(yt_dlp.postprocessor.FFmpegMetadataPP(ydl, add_metadata=True))
+                
             print(f"Starting download for {req.url}")
             info = ydl.extract_info(req.url, download=True)
             if info:
                 title = clean_title(info.get('title', 'Unknown'))
+                video_id = info.get('id')
                 jobs[job_id]['status'] = 'done'
                 jobs[job_id]['title'] = title
+                if video_id:
+                    add_to_history(video_id)
                 print(f"Download finished for: {title}")
             else:
                 jobs[job_id]['status'] = 'failed'
@@ -417,44 +585,59 @@ async def start_download(req: DownloadRequest):
                         
                     job_id = str(uuid.uuid4())
                     
+                    is_archived = False
+                    video_id = entry.get('id')
+                    if video_id and not req.force:
+                        is_archived = check_history(video_id)
+                    
                     sub_req = DownloadRequest(
                         url=sub_url,
-                        format=req.format,
+                        codec=req.codec,
                         bitrate=req.bitrate,
+                        sample_rate=req.sample_rate,
+                        sample_format=req.sample_format,
                         embed_thumbnail=req.embed_thumbnail,
-                        embed_metadata=req.embed_metadata
+                        embed_metadata=req.embed_metadata,
+                        force=req.force
                     )
                         
                     jobs[job_id] = {
                         "id": job_id,
                         "url": sub_url,
                         "title": entry.get('title', 'Pending...'),
-                        "status": "queued",
-                        "percent": 0.0,
+                        "status": "archived" if is_archived else "queued",
+                        "percent": 100.0 if is_archived else 0.0,
                         "speed": "0.0 MB/s",
                         "eta": "00:00",
                         "_req_data": sub_req.dict(),
                         "_download_path": download_path
                     }
-                    download_queue.put((job_id, sub_req, download_path))
+                    if not is_archived:
+                        download_queue.put((job_id, sub_req, download_path))
             else:
                 # Single track
                 if is_already_queued(req.url):
                     return {"status": "error", "message": "Track is already in the queue or downloading."}
                     
+                video_id = info.get('id')
+                is_archived = False
+                if video_id and not req.force:
+                    is_archived = check_history(video_id)
+
                 job_id = str(uuid.uuid4())
                 jobs[job_id] = {
                     "id": job_id,
                     "url": req.url,
                     "title": info.get('title', 'Pending...'),
-                    "status": "queued",
-                    "percent": 0.0,
+                    "status": "archived" if is_archived else "queued",
+                    "percent": 100.0 if is_archived else 0.0,
                     "speed": "0.0 MB/s",
                     "eta": "00:00",
                     "_req_data": req.dict(),
                     "_download_path": download_path
                 }
-                download_queue.put((job_id, req, download_path))
+                if not is_archived:
+                    download_queue.put((job_id, req, download_path))
                 
     except Exception as e:
         print(f"Initial extraction failed: {str(e)}. Attempting direct download...")
@@ -503,6 +686,14 @@ async def stop_job(job_id: str):
         jobs[job_id]['status'] = 'cancelled'
         return {"status": "success"}
     return {"status": "error", "message": "Job not found"}
+
+@app.post("/api/shutdown")
+async def shutdown_server():
+    def kill():
+        time.sleep(0.5)
+        os._exit(0)
+    threading.Thread(target=kill, daemon=True).start()
+    return {"status": "success", "message": "Server shutting down..."}
 
 @app.post("/api/queue/pause")
 async def pause_all():
@@ -554,19 +745,53 @@ async def link_account(background_tasks: BackgroundTasks):
 @app.get("/api/account-status")
 async def account_status():
     linked = os.path.exists(YT_PROFILE_DIR)
+    has_cookies = os.path.exists(COOKIES_FILE)
+    
     return {
         "linked": linked,
         "last_refresh": LAST_COOKIE_REFRESH,
-        "proxy_count": len(PROXIES)
-    }
-    has_cookies = os.path.exists(COOKIES_FILE)
-    return {
-        "linked": linked,
+        "proxy_count": len(PROXIES),
         "has_cookies": has_cookies,
         "cookies_modified": time.ctime(os.path.getmtime(COOKIES_FILE)) if has_cookies else "Never"
     }
 
+
+@app.websocket("/ws/jobs")
+async def websocket_jobs(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+@app.post("/api/jobs/{job_id}/redownload")
+async def redownload_job(job_id: str):
+    if job_id in jobs:
+        if jobs[job_id]['status'] == 'archived':
+            jobs[job_id]['status'] = 'queued'
+            jobs[job_id]['percent'] = 0.0
+            req_data = jobs[job_id].get('_req_data')
+            if req_data:
+                req_data['force'] = True
+                req = DownloadRequest(**req_data)
+                download_path = jobs[job_id].get('_download_path', DEFAULT_DOWNLOAD_PATH)
+                download_queue.put((job_id, req, download_path))
+                return {"status": "success"}
+    return {"status": "error", "message": "Job not found or not archived"}
+
+@app.post("/api/jobs/cleanup")
+async def cleanup_jobs():
+    keys_to_delete = []
+    for job_id, job in jobs.items():
+        if job['status'] in ['done', 'failed', 'archived']:
+            keys_to_delete.append(job_id)
+    for k in keys_to_delete:
+        del jobs[k]
+    return {"status": "success", "cleaned": len(keys_to_delete)}
+
 @app.get("/api/jobs")
+
 async def get_jobs():
     return list(jobs.values())
 
