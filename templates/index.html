@@ -18,7 +18,12 @@
 <body class="min-h-screen p-4 sm:p-8">
     <div class="max-w-4xl mx-auto space-y-8 animate-fade">
         <!-- Header -->
-        <header class="text-center space-y-4">
+        <header class="text-center space-y-4 relative">
+            <div class="absolute right-0 top-0">
+                <button id="shutdownServer" class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl text-sm font-bold flex items-center gap-2 transition-all">
+                    <i data-lucide="power" class="w-4 h-4"></i> Shutdown Server
+                </button>
+            </div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 text-sm font-medium border border-indigo-500/20">
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
                 Local Network Edition
@@ -44,29 +49,56 @@
                         class="w-full h-14 px-6 rounded-xl bg-black/40 border border-white/10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none text-lg">
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="space-y-2">
                         <label class="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                            <i data-lucide="music" class="w-4 h-4"></i> Format
+                            <i data-lucide="music" class="w-4 h-4"></i> Codec
                         </label>
-                        <select id="format" class="w-full h-12 px-4 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
-                            <option value="mp3">MP3 (Universal)</option>
-                            <option value="m4a">M4A (Apple)</option>
-                            <option value="flac">FLAC (Lossless)</option>
-                            <option value="wav">WAV (Uncompressed)</option>
-                            <option value="opus">OPUS (Modern)</option>
+                        <select id="codec" class="w-full h-12 px-3 text-sm rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
+                            <option value="mp3">MP3</option>
+                            <option value="m4a">AAC (m4a)</option>
+                            <option value="opus">Opus</option>
+                            <option value="vorbis">Ogg Vorbis</option>
+                            <option value="flac">FLAC</option>
+                            <option value="alac">ALAC</option>
+                            <option value="truehd">Dolby TrueHD</option>
+                            <option value="dts">DTS</option>
+                            <option value="wav">WAV (PCM)</option>
+                            <option value="aiff">AIFF</option>
                         </select>
                     </div>
                     <div class="space-y-2">
                         <label class="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                            <i data-lucide="disc" class="w-4 h-4"></i> Quality
+                            <i data-lucide="disc" class="w-4 h-4"></i> Bitrate
                         </label>
-                        <select id="bitrate" class="w-full h-12 px-4 rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
-                            <option value="best">Highest Native (Lossless/High-Res)</option>
-                            <option value="320">320 kbps (Standard Max)</option>
-                            <option value="256">256 kbps (High)</option>
-                            <option value="192">192 kbps (Medium)</option>
-                            <option value="128">128 kbps (Standard)</option>
+                        <select id="bitrate" class="w-full h-12 px-3 text-sm rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
+                            <!-- Populated by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4"></i> Sample Rate
+                        </label>
+                        <select id="sample_rate" class="w-full h-12 px-3 text-sm rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
+                            <option value="auto">Auto (Source)</option>
+                            <option value="44100">44.1 kHz</option>
+                            <option value="48000">48 kHz</option>
+                            <option value="88200">88.2 kHz</option>
+                            <option value="96000">96 kHz</option>
+                            <option value="176400">176.4 kHz</option>
+                            <option value="192000">192 kHz</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="layers" class="w-4 h-4"></i> Bit Depth
+                        </label>
+                        <select id="sample_format" class="w-full h-12 px-3 text-sm rounded-xl bg-black/40 border border-white/10 outline-none focus:border-indigo-500 transition-all">
+                            <option value="auto">Auto (Source)</option>
+                            <option value="s16">16-bit (s16)</option>
+                            <option value="s24">24-bit (s24)</option>
+                            <option value="s32">32-bit (s32)</option>
+                            <option value="flt">Float32 (flt)</option>
                         </select>
                     </div>
                 </div>
@@ -132,6 +164,7 @@
                     <p class="text-xs text-slate-400 mt-1 font-mono hover:text-white transition-colors"><span id="completedCount" class="text-indigo-400 font-bold text-sm">0</span> / <span id="totalCount">0</span> Tracks Completed</p>
                 </div>
                 <div class="flex gap-2">
+                    <button onclick="api.cleanup()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 rounded-lg transition-colors border border-blue-500/20"><i data-lucide="trash" class="w-4 h-4"></i> Clean List</button>
                     <button onclick="api.pauseAll()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 rounded-lg transition-colors border border-amber-500/20"><i data-lucide="pause-circle" class="w-4 h-4"></i> Pause All</button>
                     <button onclick="api.resumeAll()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg transition-colors border border-green-500/20"><i data-lucide="play-circle" class="w-4 h-4"></i> Resume All</button>
                     <button onclick="api.stopAll()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors border border-red-500/20"><i data-lucide="stop-circle" class="w-4 h-4"></i> Stop All</button>
@@ -161,6 +194,32 @@
 
     <script>
         lucide.createIcons();
+        
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const colors = {
+                'success': 'bg-green-500/20 text-green-400 border-green-500/30',
+                'error': 'bg-red-500/20 text-red-400 border-red-500/30',
+                'info': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+            };
+            toast.className = `glass px-4 py-3 rounded-xl border font-semibold text-sm shadow-xl flex items-center gap-2 animate-fade pointer-events-auto ${colors[type]}`;
+            
+            let icon = 'info';
+            if(type === 'success') icon = 'check-circle';
+            if(type === 'error') icon = 'alert-circle';
+            
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i> ${message}`;
+            document.getElementById('toast-container').appendChild(toast);
+            if (window.lucide) lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                toast.style.transition = 'all 0.3s ease-out';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         const api = {
             start: (data) => fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()),
             jobs: () => fetch('/api/jobs').then(r => r.json()),
@@ -174,17 +233,113 @@
             stop: (id) => fetch(`/api/jobs/${id}/stop`, { method: 'POST' }).then(r => r.json()),
             pauseAll: () => fetch(`/api/queue/pause`, { method: 'POST' }).then(r => r.json()),
             resumeAll: () => fetch(`/api/queue/resume`, { method: 'POST' }).then(r => r.json()),
-            stopAll: () => fetch(`/api/queue/stop`, { method: 'POST' }).then(r => r.json())
+            stopAll: () => fetch(`/api/queue/stop`, { method: 'POST' }).then(r => r.json()),
+            cleanup: () => fetch(`/api/jobs/cleanup`, { method: 'POST' }).then(r => r.json()),
+            redownload: (id) => fetch(`/api/jobs/${id}/redownload`, { method: 'POST' }).then(r => r.json())
         };
+
+        document.getElementById('shutdownServer').addEventListener('click', async () => {
+            if (confirm("Are you sure you want to stop the server? This will terminate all operations and clear memory.")) {
+                try {
+                    await fetch('/api/shutdown', { method: 'POST' });
+                    document.body.innerHTML = '<div class="flex h-screen items-center justify-center text-center text-red-500 text-3xl font-bold p-8">Server is offline.<br/>Process and RAM have been cleared.<br/>You can now safely close this window.</div>';
+                } catch(e) {
+                    console.error(e);
+                }
+            }
+        });
 
         // Load initial settings
         api.getSettings().then(s => document.getElementById('downloadPath').value = s.download_path);
 
+        
+        // Load preferences
+        const savedCodec = localStorage.getItem('pref_codec');
+        if (savedCodec) document.getElementById('codec').value = savedCodec;
+
+        const savedSR = localStorage.getItem('pref_sr');
+        if (savedSR) document.getElementById('sample_rate').value = savedSR;
+        const savedSF = localStorage.getItem('pref_sf');
+        if (savedSF) document.getElementById('sample_format').value = savedSF;
+
+        const bitrateOptions = {
+            'mp3': [
+                {val: '320k', text: '320 kbps (Highest quality)'},
+                {val: '192k', text: '192 kbps (Medium quality)'},
+                {val: '128k', text: '128 kbps (Standard/Radio quality)'}
+            ],
+            'm4a': [
+                {val: '320k', text: '320 kbps (Max streaming quality)'},
+                {val: '256k', text: '256 kbps (Apple Music high quality)'},
+                {val: '128k', text: '128 kbps (Standard YouTube audio)'}
+            ],
+            'vorbis': [
+                {val: '320k', text: '320 kbps (Spotify Premium)'},
+                {val: '160k', text: '160 kbps (Spotify Standard)'},
+                {val: '96k', text: '96 kbps (Low data)'}
+            ],
+            'opus': [
+                {val: '160k', text: '160 kbps (Highest)'},
+                {val: '96k', text: '96 kbps (Standard streaming)'},
+                {val: '64k', text: '64 kbps (High-quality Discord/VoIP)'}
+            ],
+            'flac': [
+                {val: 'best', text: 'Average ~850 kbps (Dynamic VBR)'}
+            ],
+            'alac': [
+                {val: 'best', text: 'Average ~850 kbps (Dynamic VBR)'}
+            ],
+            'truehd': [
+                {val: 'best', text: 'Average ~3500 kbps (Dynamic VBR)'}
+            ],
+            'dts': [
+                {val: 'best', text: 'Auto/Best'}
+            ],
+            'wav': [
+                {val: 'best', text: '1411 kbps / 4608 kbps (Fixed PCM)'}
+            ],
+            'aiff': [
+                {val: 'best', text: '1411 kbps / 4608 kbps (Fixed PCM)'}
+            ]
+        };
+
+        document.getElementById('codec').addEventListener('change', (e) => {
+            const codec = e.target.value;
+            localStorage.setItem('pref_codec', codec);
+            
+            const lossless = ['flac', 'wav', 'aiff', 'alac', 'truehd', 'dts'];
+            const brSelect = document.getElementById('bitrate');
+            
+            // Populate options
+            brSelect.innerHTML = '';
+            const opts = bitrateOptions[codec] || [{val: 'best', text: 'Auto/Best'}];
+            opts.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt.val;
+                o.innerText = opt.text;
+                brSelect.appendChild(o);
+            });
+            
+            // Restore saved preference if it exists and is valid for this codec
+            const savedBitrate = localStorage.getItem('pref_bitrate');
+            if (savedBitrate && opts.some(o => o.val === savedBitrate)) {
+                brSelect.value = savedBitrate;
+            }
+            
+            brSelect.disabled = lossless.includes(codec);
+        });
+        document.getElementById('bitrate').addEventListener('change', (e) => localStorage.setItem('pref_bitrate', e.target.value));
+        document.getElementById('sample_rate').addEventListener('change', (e) => localStorage.setItem('pref_sr', e.target.value));
+        document.getElementById('sample_format').addEventListener('change', (e) => localStorage.setItem('pref_sf', e.target.value));
+
+        // Initial trigger to disable bitrate if needed
+        document.getElementById('codec').dispatchEvent(new Event('change'));
+
         document.getElementById('saveSettings').onclick = async () => {
             const path = document.getElementById('downloadPath').value;
             const res = await api.saveSettings(path);
-            if (res.status === 'success') alert('Settings saved!');
-            else alert('Error: ' + res.detail);
+            if (res.status === 'success') showToast('Settings saved!');
+            else showToast('Error: ' + res.detail, 'error');
         };
 
         const updateStatus = async () => {
@@ -223,7 +378,7 @@
         document.getElementById('linkAccount').onclick = async () => {
             const res = await api.linkAccount();
             if (res.status === 'success') {
-                alert('A browser window will open. Please log into YouTube/YouTube Music and then close the window when you are done.');
+                showToast('A browser window will open. Please log into YouTube/YouTube Music and then close the window when you are done.');
                 // Poll for status update
                 const poll = setInterval(async () => {
                     const status = await api.getStatus();
@@ -244,10 +399,10 @@
             
             try {
                 const res = await api.refreshCookies();
-                if (res.status === 'success') alert('Cookies refreshed successfully! Try your download again.');
-                else alert('Failed to fetch cookies: ' + res.message);
+                if (res.status === 'success') showToast('Cookies refreshed successfully! Try your download again.');
+                else showToast('Failed to fetch cookies: ' + res.message, 'error');
             } catch (e) {
-                alert('Error connecting to server.');
+                showToast('Error connecting to server.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
@@ -264,8 +419,10 @@
 
             const data = {
                 url: document.getElementById('url').value,
-                format: document.getElementById('format').value,
+                codec: document.getElementById('codec').value,
                 bitrate: document.getElementById('bitrate').value,
+                sample_rate: document.getElementById('sample_rate').value,
+                sample_format: document.getElementById('sample_format').value,
                 embed_thumbnail: true,
                 embed_metadata: true
             };
@@ -278,11 +435,25 @@
             lucide.createIcons();
         };
 
-        // Polling loop
-        setInterval(async () => {
-            updateStatus(); // Update session/proxy status regularly
-            const jobs = await api.jobs();
+        // WebSocket connection
+        let ws;
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/jobs`);
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'jobs_update') {
+                    renderJobs(data.jobs);
+                }
+            };
+            ws.onclose = () => {
+                setTimeout(connectWebSocket, 2000);
+            };
+        }
+        connectWebSocket();
+
+        const renderJobs = (jobs) => {
             if (jobs.length > 0) document.getElementById('queueSection').classList.remove('hidden');
+            else document.getElementById('queueSection').classList.add('hidden');
             
             const completed = jobs.filter(j => j.status === 'done').length;
             if (document.getElementById('completedCount')) {
@@ -292,7 +463,7 @@
             
             const list = document.getElementById('jobList');
             list.innerHTML = jobs.map(j => `
-                <div class="glass p-4 rounded-xl space-y-3 ${j.status === 'failed' ? 'border-red-500/30' : ''} ${j.status === 'cancelled' ? 'opacity-50' : ''}">
+                <div class="glass p-4 rounded-xl space-y-3 ${j.status === 'failed' ? 'border-red-500/30' : ''} ${j.status === 'cancelled' || j.status === 'archived' ? 'opacity-50' : ''}">
                     <div class="flex justify-between items-start">
                         <div class="truncate max-w-[70%]">
                             <h4 class="font-bold truncate">${j.title}</h4>
@@ -308,10 +479,12 @@
                         <div class="progress-bar h-full ${
                             j.status === 'failed' ? 'bg-red-500' : 
                             j.status === 'paused' ? 'bg-amber-500' :
-                            j.status === 'cancelled' ? 'bg-slate-600' : 'bg-indigo-500'
+                            j.status === 'cancelled' || j.status === 'archived' ? 'bg-slate-600' : 'bg-indigo-500'
                         }" style="width: ${j.percent}%"></div>
                     </div>
                     <div class="flex justify-end gap-4 pt-1 border-t border-white/5 mt-3">
+                        ${j.status === 'archived' ? 
+                            `<button onclick="api.redownload('${j.id}')" class="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400 hover:text-indigo-400 transition-colors"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Redownload</button>` : ''}
                         ${j.status === 'downloading' || j.status === 'queued' ? 
                             `<button onclick="api.pause('${j.id}')" class="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400 hover:text-amber-400 transition-colors"><i data-lucide="pause-circle" class="w-3.5 h-3.5"></i> Pause</button>` : ''}
                         ${j.status === 'paused' ? 
@@ -322,7 +495,13 @@
                 </div>
             `).join('');
             lucide.createIcons();
-        }, 1000);
+        };
+
+        // Polling loop just for status
+        setInterval(async () => {
+            updateStatus(); 
+        }, 3000);
     </script>
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
 </body>
 </html>

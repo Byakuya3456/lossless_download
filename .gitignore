@@ -10,7 +10,6 @@ env/
 ENV/
 
 # Project specific data & downloads
-downloads/
 cookies.txt
 .yt_profile/
 proxies.txt
@@ -24,3 +23,7 @@ proxies.txt
 # OS generated files
 .DS_Store
 Thumbs.db
+
+downloads/
+history.txt
+settings.json
