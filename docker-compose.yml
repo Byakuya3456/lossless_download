@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  local-downloader:
+    build: .
+    container_name: local-downloader
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./settings.json:/app/settings.json
+    environment:
+      - PYTHONUNBUFFERED=1

@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+downloads/
+*.tar
+*.zip
+*.7z
+.git/
+.idea/
+.vscode/
+bin/
+archive.py
+archive.bat
+7zr.exe
