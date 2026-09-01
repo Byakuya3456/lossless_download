@@ -27,3 +27,11 @@ Thumbs.db
 downloads/
 history.txt
 settings.json
+
+# Release Archives and scripts
+*.tar
+*.zip
+*.7z
+archive.py
+archive.bat
+7zr.exe
