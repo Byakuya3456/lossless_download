@@ -327,7 +327,21 @@ def run_download(job_id: str, req: DownloadRequest, download_path: str):
         pp_args.extend(["-ar", req.sample_rate])
         
     if req.sample_format and req.sample_format != "auto":
-        pp_args.extend(["-sample_fmt", req.sample_format])
+        # Only enforce sample_fmt for lossless codecs to prevent "Invalid argument" with lossy encoders
+        if req.codec.lower() in ["flac", "alac", "wav", "aiff"]:
+            target_fmt = req.sample_format
+            if req.codec.lower() == "flac":
+                # FLAC encoder supports s16 and s32 (which it encodes as 24-bit natively)
+                if target_fmt in ["s24", "flt"]:
+                    target_fmt = "s32"
+            elif req.codec.lower() == "alac":
+                # ALAC encoder supports s16p and s32p
+                if target_fmt == "s16":
+                    target_fmt = "s16p"
+                elif target_fmt in ["s24", "s32", "flt"]:
+                    target_fmt = "s32p"
+            
+            pp_args.extend(["-sample_fmt", target_fmt])
         
     if req.bitrate and req.bitrate != "best":
         if req.codec.lower() not in ["flac", "wav", "aiff", "alac", "truehd", "dts"]:

@@ -303,6 +303,33 @@
             ]
         };
 
+        function updateLosslessBitrate() {
+            const codec = document.getElementById('codec').value;
+            const lossless = ['flac', 'wav', 'aiff', 'alac', 'truehd', 'dts'];
+            if (!lossless.includes(codec)) return;
+            
+            const srVal = document.getElementById('sample_rate').value;
+            const sfVal = document.getElementById('sample_format').value;
+            const brSelect = document.getElementById('bitrate');
+            
+            brSelect.innerHTML = '';
+            const o = document.createElement('option');
+            o.value = 'best';
+            
+            if (srVal === 'auto' || sfVal === 'auto') {
+                o.innerText = 'Auto (Depends on Source)';
+            } else {
+                const sr = parseInt(srVal, 10);
+                let bd = 16;
+                if (sfVal === 's24') bd = 24;
+                if (sfVal === 's32' || sfVal === 'flt') bd = 32;
+                
+                const kbps = (sr * bd * 2) / 1000;
+                o.innerText = kbps.toLocaleString() + ' kbps';
+            }
+            brSelect.appendChild(o);
+        }
+
         document.getElementById('codec').addEventListener('change', (e) => {
             const codec = e.target.value;
             localStorage.setItem('pref_codec', codec);
@@ -310,27 +337,41 @@
             const lossless = ['flac', 'wav', 'aiff', 'alac', 'truehd', 'dts'];
             const brSelect = document.getElementById('bitrate');
             
-            // Populate options
-            brSelect.innerHTML = '';
-            const opts = bitrateOptions[codec] || [{val: 'best', text: 'Auto/Best'}];
-            opts.forEach(opt => {
-                const o = document.createElement('option');
-                o.value = opt.val;
-                o.innerText = opt.text;
-                brSelect.appendChild(o);
-            });
-            
-            // Restore saved preference if it exists and is valid for this codec
-            const savedBitrate = localStorage.getItem('pref_bitrate');
-            if (savedBitrate && opts.some(o => o.val === savedBitrate)) {
-                brSelect.value = savedBitrate;
+            if (lossless.includes(codec)) {
+                brSelect.disabled = false;
+                brSelect.style.pointerEvents = 'none';
+                updateLosslessBitrate();
+            } else {
+                brSelect.disabled = false;
+                brSelect.style.pointerEvents = 'auto';
+                
+                // Populate options
+                brSelect.innerHTML = '';
+                const opts = bitrateOptions[codec] || [{val: 'best', text: 'Auto/Best'}];
+                opts.forEach(opt => {
+                    const o = document.createElement('option');
+                    o.value = opt.val;
+                    o.innerText = opt.text;
+                    brSelect.appendChild(o);
+                });
+                
+                // Restore saved preference if it exists and is valid for this codec
+                const savedBitrate = localStorage.getItem('pref_bitrate');
+                if (savedBitrate && opts.some(o => o.val === savedBitrate)) {
+                    brSelect.value = savedBitrate;
+                }
             }
-            
-            brSelect.disabled = lossless.includes(codec);
         });
+        
         document.getElementById('bitrate').addEventListener('change', (e) => localStorage.setItem('pref_bitrate', e.target.value));
-        document.getElementById('sample_rate').addEventListener('change', (e) => localStorage.setItem('pref_sr', e.target.value));
-        document.getElementById('sample_format').addEventListener('change', (e) => localStorage.setItem('pref_sf', e.target.value));
+        document.getElementById('sample_rate').addEventListener('change', (e) => {
+            localStorage.setItem('pref_sr', e.target.value);
+            updateLosslessBitrate();
+        });
+        document.getElementById('sample_format').addEventListener('change', (e) => {
+            localStorage.setItem('pref_sf', e.target.value);
+            updateLosslessBitrate();
+        });
 
         // Initial trigger to disable bitrate if needed
         document.getElementById('codec').dispatchEvent(new Event('change'));
